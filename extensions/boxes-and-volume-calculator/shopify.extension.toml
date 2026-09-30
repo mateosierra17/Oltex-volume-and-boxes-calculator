@@ -38,9 +38,55 @@ api_access = true
 # your extension. Learn more:
 # https://shopify.dev/docs/api/checkout-ui-extensions/latest#configuration
 
-# [extensions.settings]
-# [[extensions.settings.fields]]
-# key = "banner_title"
-# type = "single_line_text_field"
-# name = "Banner title"
-# description = "Enter a title for the banner"
+[extensions.settings]
+
+[[extensions.settings.fields]]
+key = "section_header"
+type = "single_line_text_field"
+name = "Header: text content"
+description = "text on top"
+
+[[extensions.settings.fields]]
+key = "number_of_bulks_image"
+type = "single_line_text_field"
+name = "ICON : number of bulks image"
+description = "an image url"
+[[extensions.settings.fields]]
+key = "number_of_bulks_label"
+type = "single_line_text_field"
+name = "LABEL : number of bulks label"
+description = "label"
+
+[[extensions.settings.fields]]
+key = "number_of_units_image"
+type = "single_line_text_field"
+name = "ICON : number of units image"
+description = "an image url"
+[[extensions.settings.fields]]
+key = "number_of_units_label"
+type = "single_line_text_field"
+name = "LABEL : number of units LABEL"
+description = "label"
+
+[[extensions.settings.fields]]
+key = "volumetric_weight_image"
+type = "single_line_text_field"
+name = "ICON : volumetric weight image"
+description = "label"
+[[extensions.settings.fields]]
+key = "volumetric_weight_label"
+type = "single_line_text_field"
+name = "LABEL : volumetric weight label"
+description = "label"
+
+
+[[extensions.settings.fields]]
+key = "box_image"
+type = "single_line_text_field"
+name = "ICON : box image"
+description = "label"
+[[extensions.settings.fields]]
+key = "box_label"
+type = "single_line_text_field"
+name = "LABEL : box image"
+description = "label"
