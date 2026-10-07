@@ -1,6 +1,6 @@
 import '@shopify/ui-extensions/preact';
 import {render} from "preact";
-import {useState} from "preact/hooks";
+import {useState, useRef} from "preact/hooks";
 
 export default async () => {
   render(<Extension />, document.body);
@@ -24,6 +24,8 @@ function Extension() {
 
   // Hooks must run before any early return
   const [text, setText] = useState(saved ?? "");
+  const [error, setError] = useState("");
+  const timer = useRef();
 
   if (!shopify.instructions.value.metafields.canSetCartMetafields) {
     return (
@@ -33,24 +35,21 @@ function Extension() {
     );
   }
 
-  return (
-    <s-stack gap="small-200">
-      <s-heading>{header}</s-heading>
-      <s-text-area
-        labelAccessibilityVisibility="exclusive"
-        label="Order notes (optional)"
-        placeholder={placeholder}
-        rows={3}
-        value={text}
-        onInput={(e) => setText(e.currentTarget.value)}
-        onChange={save}
-      />
-    </s-stack>
-  );
-
-  async function save(event) {
+  function handleInput(event) {
     const value = event.currentTarget.value;
+    setText(value);
+    // Save shortly after the buyer stops typing
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => save(value), 400);
+  }
 
+  function handleChange(event) {
+    // Save immediately on blur/commit
+    clearTimeout(timer.current);
+    save(event.currentTarget.value);
+  }
+
+  async function save(value) {
     const result = await shopify.applyMetafieldChange(
       value.trim() === ""
         ? { type: "removeCartMetafield", namespace: NAMESPACE, key: KEY }
@@ -65,5 +64,22 @@ function Extension() {
           },
     );
     console.log("applyMetafieldChange result", result);
+    setError(result.type === "error" ? result.message : "");
   }
+
+  return (
+    <s-stack gap="small-200">
+      <s-heading>{header}</s-heading>
+      <s-text-area
+        labelAccessibilityVisibility="exclusive"
+        label="Order notes (optional)"
+        placeholder={placeholder}
+        rows={3}
+        value={text}
+        error={error}
+        onInput={handleInput}
+        onChange={handleChange}
+      />
+    </s-stack>
+  );
 }
