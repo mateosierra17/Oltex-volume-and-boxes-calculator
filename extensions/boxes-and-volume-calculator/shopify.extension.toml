@@ -79,13 +79,47 @@ type = "single_line_text_field"
 name = "LABEL : volumetric weight label"
 description = "Label"
 
+
 [[extensions.settings.fields]]
-key = "box_image"
+key = "envelope_image"
 type = "single_line_text_field"
-name = "ICON : box image"
+name = "ICON : envelope image"
 description = "An image url"
 [[extensions.settings.fields]]
-key = "box_label"
+key = "envelope_label"
 type = "single_line_text_field"
-name = "LABEL : box image"
+name = "LABEL : envelope"
+description = "Label"
+
+[[extensions.settings.fields]]
+key = "small_box_image"
+type = "single_line_text_field"
+name = "ICON : small box image"
+description = "An image url"
+[[extensions.settings.fields]]
+key = "small_box_label"
+type = "single_line_text_field"
+name = "LABEL : small box"
+description = "Label"
+
+[[extensions.settings.fields]]
+key = "medium_box_image"
+type = "single_line_text_field"
+name = "ICON : medium box image"
+description = "An image url"
+[[extensions.settings.fields]]
+key = "medium_box_label"
+type = "single_line_text_field"
+name = "LABEL : medium box"
+description = "Label"
+
+[[extensions.settings.fields]]
+key = "big_box_image"
+type = "single_line_text_field"
+name = "ICON : big box image"
+description = "An image url"
+[[extensions.settings.fields]]
+key = "big_box_label"
+type = "single_line_text_field"
+name = "LABEL : big box"
 description = "Label"

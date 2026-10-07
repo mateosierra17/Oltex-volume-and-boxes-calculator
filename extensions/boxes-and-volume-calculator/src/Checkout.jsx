@@ -6,36 +6,6 @@ export default async () => {
   render(<Extension />, document.body);
 };
 
-
-const WEIGHT_QUERY = `
-  query getVariantWeights($ids: [ID!]!) {
-    nodes(ids: $ids) {
-      ... on ProductVariant {
-        id
-        title
-        weight
-        weightUnit
-        product {
-          title
-        }
-        volumen: metafield(namespace: "custom", key: "volumen") {
-          value
-          type
-        }
-      }
-    }
-  }
-`;
-
-
-function Extension() {
-
-  const [products, setProducts] = useState([])
-  const [totalWeight, setTotalWeight] = useState(0)
-  const [totalUnits, setTotalUnits] = useState(0)
-  const [totalVolumeOnCart, setToTalVolumeOnCart] = useState(0)
-  const [boxesSummary, setBoxesSummary] = useState()
-
 const VOLUMETRIC_DIVISOR = 5000; // cm³ per kg, confirm with your carrier
 const KG_PER_M3 = 1_000_000 / VOLUMETRIC_DIVISOR; // 200
 
@@ -66,147 +36,184 @@ const boxVolumesAndMeasurements = {
   },
 };
 
- useEffect(() => {
-  const ids = [
-    ...new Set(shopify.lines.value.map((line) => line.merchandise.id)),
-  ];
-
-  if (!ids.length) return;
-
-  let cancelled = false;
-
-  const fetchWeights = async () => {
-    try {
-      const {data, errors} = await shopify.query(WEIGHT_QUERY, {
-        variables: {ids},
-      });
-
-      if (cancelled) return;
-
-      if (errors?.length) {
-        console.error("Weight query errors", errors);
-        return;
+const WEIGHT_QUERY = `
+  query getVariantWeights($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      ... on ProductVariant {
+        id
+        title
+        weight
+        weightUnit
+        product {
+          title
+        }
+        volumen: metafield(namespace: "custom", key: "volumen") {
+          value
+          type
+        }
       }
-
-      const nodes = (data?.nodes ?? []).filter(Boolean);
-
-      // Build a lookup once: variant ID -> variant data
-      const variantsById = new Map(nodes.map((v) => [v.id, v]));
-
-      // Match each cart line to its variant
-      const matched = shopify.lines.value.map((line) => {
-        const variant = variantsById.get(line.merchandise.id);
-        return {
-          lineId: line.id,
-          quantity: line.quantity,
-          variant: variant ?? null,
-        };
-      });
-
-      setProducts(matched)
-    } catch (err) {
-      console.error("Failed to fetch variant weights", err);
     }
-  };
+  }
+`;
 
-  fetchWeights();
 
-  return () => {
-    cancelled = true;
-  };
+function Extension() {
+  const [products, setProducts] = useState([])
+
+
+
+  useEffect(() => {
+    const ids = [
+      ...new Set(shopify.lines.value.map((line) => line.merchandise.id)),
+    ];
+
+    if (!ids.length) return;
+
+    let cancelled = false;
+
+    const fetchWeights = async () => {
+      try {
+        const {data, errors} = await shopify.query(WEIGHT_QUERY, {
+          variables: {ids},
+        });
+
+        if (cancelled) return;
+
+        if (errors?.length) {
+          console.error("Weight query errors", errors);
+          return;
+        }
+
+        const nodes = (data?.nodes ?? []).filter(Boolean);
+
+        // Build a lookup once: variant ID -> variant data
+        const variantsById = new Map(nodes.map((v) => [v.id, v]));
+
+        // Match each cart line to its variant
+        const matched = shopify.lines.value.map((line) => {
+          const variant = variantsById.get(line.merchandise.id);
+          return {
+            lineId: line.id,
+            quantity: line.quantity,
+            variant: variant ?? null,
+          };
+        });
+
+        setProducts(matched)
+      } catch (err) {
+        console.error("Failed to fetch variant weights", err);
+      }
+    };
+
+    fetchWeights();
+
+    return () => {
+      cancelled = true;
+    };
 }, []);
 
   useEffect(() => {
+    if (!products.length) return; // skip the initial empty render
+  }, [products]);
 
-    const getTotalOrderVolumetricBulk = () =>{
-      
-      let unitCount = 0 
-      let totalVolume = 0 
-      
-      products.forEach(product => { 
-        console.log("product", product.quantity)
-        unitCount = unitCount + product.quantity
-        totalVolume = (JSON.parse(product.variant.volumen.value).value * product.quantity ) + totalVolume
-      })
-      setToTalVolumeOnCart(totalVolume)
-      setTotalUnits(unitCount)
+
+  function getLineVolume(product) {
+    const raw = product.variant?.volumen?.value;   // might be missing
+    if (!raw) return 0;                            // no metafield -> no volume
+
+    const volumePerUnit = JSON.parse(raw).value;   // string -> object -> number
+    return volumePerUnit * product.quantity;
+  }
+
+  let totalVolumeOnCart = 0
+  let orderTotalUnits = 0
+  let finalVolume = 0
+  let totalWeight = 0 
+
+  let packagingSummary = {
+    envelope : 0, 
+    small: 0,
+    medium: 0,
+    big: 0, 
+    total: 0,
+    finalVolume: 0,
+  }
+
+  function calculatePackagingSummary(){
+    let currentVolume = totalVolumeOnCart
+    
+    function pickNextBox() {
+      const volumeOnSmallBox  = currentVolume - boxVolumesAndMeasurements.small.volume
+      const volumeOnMediumBox = currentVolume - boxVolumesAndMeasurements.medium.volume
+      const volumeOnBigBox    = currentVolume - boxVolumesAndMeasurements.big.volume
+      const volumeOnEnvelope = currentVolume - boxVolumesAndMeasurements.envelope.volume
+
+      if (volumeOnEnvelope <= 0)  return { box: 'envelope',  leftoverVolume: volumeOnEnvelope }
+      if (volumeOnSmallBox <= 0)  return { box: 'small',  leftoverVolume: volumeOnSmallBox }
+      if (volumeOnMediumBox <= 0) return { box: 'medium', leftoverVolume: volumeOnMediumBox }
+      return { box: 'big', leftoverVolume: volumeOnBigBox }
     }
 
-    const calculateBoxTotal = ()=>{
-      // always 1 big box as an innitial box 
+    while (currentVolume > 0 ){
+      const {box, leftoverVolume} = pickNextBox()
+      packagingSummary.total =  packagingSummary.total + 1
+      packagingSummary[box] =   packagingSummary[box] + 1
+      currentVolume = leftoverVolume
+    }
+    packagingSummary.finalVolume = currentVolume
+    return packagingSummary
+  }
 
-      let currentTotalVolume = totalVolumeOnCart
+  products.forEach((product) => {
+    totalVolumeOnCart = totalVolumeOnCart + getLineVolume(product)
+    orderTotalUnits = orderTotalUnits + product.quantity
+    totalWeight = totalWeight + (product.variant.weight * product.quantity )  
+  });
 
-      const pickNextBox = (remainingVolume)=>{
-        const nextBox = {
-          size : ``,
-          leftOverSpace : 0,
-        }
+    calculatePackagingSummary()
 
-        let againstSmallBox = remainingVolume - boxVolumesAndMeasurements.small.volume
-        let againstMediumBox = remainingVolume - boxVolumesAndMeasurements.medium.volume
-        let againstBigBox = remainingVolume - boxVolumesAndMeasurements.big.volume
-      
-        if(againstSmallBox < 0){
-          nextBox.size = 'small'
-          nextBox.leftOverSpace = againstSmallBox
-        }else if (againstMediumBox < 0){
-          nextBox.size = 'medium'
-          nextBox.leftOverSpace = againstMediumBox
-        }else{
-          nextBox.size = 'big'
-          nextBox.leftOverSpace = againstBigBox
-        }
-        
-        return nextBox
-      }
+  let totalVolumetricWeight = `${(
+  (packagingSummary.small * boxVolumesAndMeasurements.small.volumetricKg) +
+  (packagingSummary.medium * boxVolumesAndMeasurements.medium.volumetricKg) +
+  (packagingSummary.big * boxVolumesAndMeasurements.big.volumetricKg))} kg`
 
-      let total_box_summary = {
-        small: 0,
-        medium: 0,
-        big: 1,
-        envelope: 0,
-        total_boxes: 1
-      }
-      // stop counting if volume fits on a singular big box
-      if(totalVolumeOnCart < boxVolumesAndMeasurements.big.volume){
-        console.log("total box summary", total_box_summary)
-        setBoxesSummary(total_box_summary)
-        return total_box_summary
-      }
+  totalWeight = (totalWeight /1000) + ' kg'
 
-      currentTotalVolume = currentTotalVolume - boxVolumesAndMeasurements.big.volume
 
-      while(currentTotalVolume > 0){
-        const { leftOverSpace, size } = pickNextBox(currentTotalVolume)
-        total_box_summary[size] = total_box_summary[size] + 1
-        currentTotalVolume = leftOverSpace 
-        total_box_summary.total_boxes = total_box_summary.total_boxes + 1
-        console.log("loop continues...")
-      }
 
-      console.groupCollapsed("summary")
-        console.log("box summary", total_box_summary )
-        console.log("leftover space", currentTotalVolume)
+  console.group("cart summary")
+    console.log("products", products)
+    console.log("total units", orderTotalUnits)
+    console.log("total volume (m³)", totalVolumeOnCart)
+    console.log("total weight : ", totalWeight)
+
+    console.group("volume per line")
+      console.table(
+        products.map((product) => ({
+          lineId: product.lineId,
+          product: product.variant?.product?.title,
+          variant: product.variant?.title,
+          quantity: product.quantity,
+          rawMetafield: product.variant?.volumen?.value,
+          volumePerLine: getLineVolume(product),
+        }))
+      )
+    console.groupEnd()
+
+      console.group("packaging")
+        console.log("remaining after first big box (m³)", totalVolumeOnCart - boxVolumesAndMeasurements.big.volume)
+        console.log("final volume", packagingSummary.finalVolume)
+        console.log("packagingSummary", { ...packagingSummary })
+        console.table({
+          small:  { count: packagingSummary.small,  volumeEach: boxVolumesAndMeasurements.small.volume,  volumetricKgEach: boxVolumesAndMeasurements.small.volumetricKg },
+          medium: { count: packagingSummary.medium, volumeEach: boxVolumesAndMeasurements.medium.volume, volumetricKgEach: boxVolumesAndMeasurements.medium.volumetricKg },
+          big:    { count: packagingSummary.big,    volumeEach: boxVolumesAndMeasurements.big.volume,    volumetricKgEach: boxVolumesAndMeasurements.big.volumetricKg },
+        })
       console.groupEnd()
 
-
-      return total_box_summary
-    }
-
-    const newBoxSummary = calculateBoxTotal()
-
-    getTotalOrderVolumetricBulk()
-    setBoxesSummary(newBoxSummary)
-
-    if (!products.length) return; // skip the initial empty render
-
-    console.log("products changed", products);
-    console.log("total units", totalUnits)
-    console.log("total volume on cart ", totalVolumeOnCart)
-    console.log("box summary state", boxesSummary)
-  
-  }, [products, totalUnits]);
+    console.log("total volumetric weight", totalVolumetricWeight)
+    console.log("constants", { VOLUMETRIC_DIVISOR, KG_PER_M3 })
+  console.groupEnd()
 
 
   // UI 
@@ -218,18 +225,23 @@ const boxVolumesAndMeasurements = {
     number_of_units_label,
     volumetric_weight_image,
     volumetric_weight_label,
-    box_image,
-    box_label,
     } = shopify.settings.value;
+  
+  const {
+    envelope_image, envelope_label,
+    small_box_image, small_box_label,
+    medium_box_image, medium_box_label,
+    big_box_image, big_box_label,
+  } = shopify.settings.value
 
   const renderImageBox = (image_url, item_label, calculatedValue) =>{
     return(
         <s-grid
-              gridTemplateColumns="1fr 1fr"
+              gridTemplateColumns="65px 1fr"
               padding="none"
               alignItems='baseline'>
                 <s-grid-item borderStyle="dashed">
-                  <s-box inlineSize="75px">
+                  <s-box inlineSize="60px">
                       <s-image
                         src={ image_url}
                         alt="Indoor plant product photo"
@@ -245,7 +257,8 @@ const boxVolumesAndMeasurements = {
                     <s-grid 
                       accessibilityLabel="Product listing" 
                       gridTemplateColumns="1fr auto" 
-                      alignContent='center'>
+                      alignContent='start'
+                      justifyContent='start'>
                       <s-grid-item gridColumn="span 2">
                         <s-text>{item_label}</s-text>
                       </s-grid-item>
@@ -266,10 +279,17 @@ const boxVolumesAndMeasurements = {
       maxBlockSize='100%'
       placeItems="start"
     >
-      {renderImageBox(number_of_bulks_image, number_of_bulks_label)}
-      {renderImageBox(number_of_units_image, number_of_units_label, totalUnits)}
-      {renderImageBox(volumetric_weight_image,volumetric_weight_label)}
-      {renderImageBox(box_image, box_label)}
+      {renderImageBox(number_of_bulks_image, number_of_bulks_label, packagingSummary.total)}
+      {renderImageBox(number_of_units_image, number_of_units_label, orderTotalUnits)}
+      {renderImageBox(volumetric_weight_image,volumetric_weight_label,totalWeight)}
+      
+      { packagingSummary.envelope > 0 ?  renderImageBox(envelope_image,envelope_label, `${boxVolumesAndMeasurements.envelope.measurements} * ${packagingSummary.envelope}`, ): null}
+
+      { packagingSummary.small > 0 ?  renderImageBox(small_box_image,small_box_label, `${boxVolumesAndMeasurements.small.measurements} * ${packagingSummary.small}`, ): null}
+      
+      { packagingSummary.medium > 0 ?  renderImageBox(medium_box_image,medium_box_label, `${boxVolumesAndMeasurements.medium.measurements} * ${packagingSummary.medium}`, ): null}
+      
+      { packagingSummary.big > 0 ?  renderImageBox(big_box_image,big_box_label, `${boxVolumesAndMeasurements.big.measurements} * ${packagingSummary.big}`, ): null}
     </s-grid>
   );
 }
