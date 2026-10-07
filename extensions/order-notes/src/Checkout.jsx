@@ -6,7 +6,7 @@ export default async () => {
   render(<Extension />, document.body);
 };
 
-const NAMESPACE = "$app";
+const NAMESPACE = "custom";
 const KEY = "order_optional_notes";
 
 function Extension() {
