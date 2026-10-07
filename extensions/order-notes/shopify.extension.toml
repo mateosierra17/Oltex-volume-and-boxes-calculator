@@ -44,10 +44,8 @@ api_access = true
   key = "header"
   type = "single_line_text_field"
   name = "Header"
-  description = "Title shown above the notes field"
 
   [[extensions.settings.fields]]
   key = "placeholder"
   type = "single_line_text_field"
   name = "Placeholder"
-  description = "Hint text shown inside the empty notes field"
