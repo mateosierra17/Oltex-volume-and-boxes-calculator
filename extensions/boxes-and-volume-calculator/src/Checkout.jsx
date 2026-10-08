@@ -13,25 +13,25 @@ const boxVolumesAndMeasurements = {
   envelope: {
     name: 'Sobre',
     volume: 0.0078,
-    measurements: '0,05 × 0,45 × 0,35 m',
+    measurements: '35 × 45 × 5 cm',
     volumetricKg: 0.0078 * KG_PER_M3, // 1.56
   },
   small: {
     name: 'Caja pequeña',
     volume: 0.036,
-    measurements: '0,15 × 0,4 × 0,6 m',
+    measurements: '60 × 40 × 15 cm',
     volumetricKg: 0.036 * KG_PER_M3, // 7.2
   },
   medium: {
     name: 'Caja mediana',
     volume: 0.072,
-    measurements: '0,3 × 0,4 × 0,6 m',
+    measurements: '60 × 40 × 30 cm',
     volumetricKg: 0.072 * KG_PER_M3, // 14.4
   },
   big: {
     name: 'Caja grande',
     volume: 0.096,
-    measurements: '0,4 × 0,4 × 0,6 m',
+    measurements: '60 × 40 × 40 cm',
     volumetricKg: 0.096 * KG_PER_M3, // 19.2
   },
 };
@@ -272,11 +272,15 @@ function Extension() {
     )
   }
 
-  return (
+  return (<>
+  <s-stack gap="large large" padding='base' ></s-stack>
     <s-grid
       gridTemplateColumns="1fr 1fr"
+      padding='base none base none'
       gap="large"
       maxBlockSize='100%'
+      border='base base solid'
+      borderRadius='base'
       placeItems="start"
     >
       {renderImageBox(number_of_bulks_image, number_of_bulks_label, packagingSummary.total)}
@@ -291,5 +295,5 @@ function Extension() {
       
       { packagingSummary.big > 0 ?  renderImageBox(big_box_image,big_box_label, `${boxVolumesAndMeasurements.big.measurements} * ${packagingSummary.big}`, ): null}
     </s-grid>
-  );
+  </>);
 }

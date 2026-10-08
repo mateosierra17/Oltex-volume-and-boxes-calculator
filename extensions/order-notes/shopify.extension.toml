@@ -23,8 +23,3 @@ key = "order_optional_notes"
   key = "header"
   type = "single_line_text_field"
   name = "Header"
-
-  [[extensions.settings.fields]]
-  key = "placeholder"
-  type = "single_line_text_field"
-  name = "Placeholder"
